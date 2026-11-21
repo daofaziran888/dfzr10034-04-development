@@ -107,6 +107,66 @@ class ImpactAnalysisService(BaseModuleService):
         }
         store.rows("issue_track").append(issue)
 
+    def analyze_field_impact(self, asset_code: str, field_name: str) -> dict[str, Any]:
+        """字段级影响分析：沿加工血缘输出传播路径，并转成字段级复算清单。
+
+        - 只覆盖已验证且未停用的传播路径，停用路径以截断点呈现；
+        - 与变更字段无传播关系的列（如同表的备注列）不会进入复算集；
+        - 两条路径汇合到同一字段时复算清单只有一条作业，来源路径全部保留。
+        """
+        from app.services.field_lineage import FieldLineageService
+        from app.services.recompute_todo import RecomputeTodoService
+
+        lineage_service = FieldLineageService()
+        view = lineage_service.propagation_view(asset_code, field_name)
+
+        report_id = store.next_id(self.MODULE)
+        report = {
+            "id": report_id,
+            "报告编号": f"IMPA-FIELD-{report_id:04d}",
+            "变更资产": f"{asset_code}.{field_name}",
+            "影响下游": "、".join(
+                f"{item['asset']}.{item['field']}" for item in view["reachable_fields"]
+            ) or "无有效下游",
+            "影响类型": "字段级复算",
+            "严重级别": "需关注" if view["path_count"] >= 2 else "一般",
+            "影响行数": str(len(view["reachable_fields"])),
+            "补救建议": (
+                f"字段{field_name}的变更沿{view['path_count']}条传播路径影响"
+                f"{len(view['reachable_fields'])}个下游字段，已按字段生成复算清单"
+            ),
+            "生成时间": _time.strftime("%Y-%m-%d %H:%M:%S"),
+            "status": "已生成",
+            "pending": True,
+            "abnormal": False,
+            "field_paths": view["paths"],
+            "reachable_fields": view["reachable_fields"],
+            "stopped_hops": view["stopped_hops"],
+            "created_at": _time.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        store.rows(self.MODULE).append(report)
+
+        todos = RecomputeTodoService().build_from_impact(
+            asset_code, field_name, report_id=report["报告编号"],
+        )
+        store.log_change(
+            self.MODULE, report_id, "字段级影响分析",
+            before=None,
+            after=f"{asset_code}.{field_name} -> {len(todos)}条复算待办",
+            source="field_lineage", scope="recompute_todo",
+        )
+        self.emit_event("field_impact_analyzed", {
+            "report_id": report_id,
+            "asset": asset_code,
+            "field": field_name,
+            "recompute_todo_ids": [todo["id"] for todo in todos],
+        })
+        return {
+            "report": report,
+            "propagation_view": view,
+            "recompute_todos": todos,
+        }
+
     def get_reports_by_asset(self, asset_code: str) -> list[dict[str, Any]]:
         """获取资产的所有影响报告。"""
         return store.find_by_field(self.MODULE, "变更资产", asset_code)

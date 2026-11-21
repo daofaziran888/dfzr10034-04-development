@@ -29,3 +29,9 @@ class EntryPayload(BaseModel):
 class ActionPayload(BaseModel):
     action: str
     remark: str | None = None
+
+
+class FieldLineagePayload(BaseModel):
+    """字段级血缘查询/影响分析入参。"""
+    asset: str
+    field: str

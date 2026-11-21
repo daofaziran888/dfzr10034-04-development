@@ -24,6 +24,9 @@ from app.services.version_history import VersionHistoryService
 from app.services.schedule_job import ScheduleJobService
 from app.services.diff_report import DiffReportService
 from app.services.owner_mgr import OwnerMgrService
+from app.services.field_lineage import FieldLineageService
+from app.services.processing_path import ProcessingPathService
+from app.services.recompute_todo import RecomputeTodoService
 
 # 服务模块别名，供跨模块调用
 QUALITY_SERVICE = QualityRuleService()
@@ -53,6 +56,9 @@ SERVICES: dict[str, BaseModuleService] = {
     "schedule_job": ScheduleJobService(),
     "diff_report": DiffReportService(),
     "owner_mgr": OwnerMgrService(),
+    "field_lineage": FieldLineageService(),
+    "processing_path": ProcessingPathService(),
+    "recompute_todo": RecomputeTodoService(),
 }
 
 

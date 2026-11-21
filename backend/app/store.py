@@ -325,7 +325,18 @@ class Store:
             {"label": "待处理", "value": sum(int(item["pending"]) for item in modules)},
             {"label": "异常量", "value": sum(int(item["abnormal"]) for item in modules)},
         ]
-        return {"cards": cards, "modules": modules}
+        # 字段级复算待办汇总：概览卡片据此列出关联的复算清单。
+        recompute_rows = self.rows("recompute_todo")
+        pending_by_asset: dict[str, int] = defaultdict(int)
+        for row in recompute_rows:
+            if row.get("status") != "已完成":
+                pending_by_asset[str(row.get("目标资产", ""))] += 1
+        recompute_summary = {
+            "pending": sum(pending_by_asset.values()),
+            "total": len(recompute_rows),
+            "by_asset": dict(pending_by_asset),
+        }
+        return {"cards": cards, "modules": modules, "recompute": recompute_summary}
 
 
 store = Store()
